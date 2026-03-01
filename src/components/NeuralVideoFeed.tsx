@@ -6,9 +6,21 @@ interface NeuralVideoFeedProps {
   stability: number;
   fatigue: number;
   isCalibrating: boolean;
+  heightPercentage?: number;
+  repTriggerLine?: number;
+  repState?: number;
+  onPoseLandmarks?: (landmarks: any[]) => void;
 }
 
-export const NeuralVideoFeed = ({ stability, fatigue, isCalibrating }: NeuralVideoFeedProps) => {
+export const NeuralVideoFeed = ({
+  stability,
+  fatigue,
+  isCalibrating,
+  heightPercentage = 0,
+  repTriggerLine = 40,
+  repState = 0,
+  onPoseLandmarks
+}: NeuralVideoFeedProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +63,10 @@ export const NeuralVideoFeed = ({ stability, fatigue, isCalibrating }: NeuralVid
       if (results.poseLandmarks) {
         const skeletonColor = getSkeletonColor(stability, fatigue, isCalibrating);
         drawSkeleton(ctx, results.poseLandmarks, canvas.width, canvas.height, skeletonColor);
+
+        if (onPoseLandmarks) {
+          onPoseLandmarks(results.poseLandmarks);
+        }
       }
 
       ctx.restore();
@@ -190,6 +206,48 @@ export const NeuralVideoFeed = ({ stability, fatigue, isCalibrating }: NeuralVid
           stability > 85 ? 'text-cyan-400' : stability > 70 ? 'text-yellow-400' : 'text-red-400'
         }`}>
           {stability.toFixed(1)}%
+        </div>
+      </div>
+
+      <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-slate-950/90 px-3 py-4 rounded-lg border-2 border-cyan-500/50">
+        <div className="text-cyan-400 text-xs font-mono uppercase tracking-wider mb-2 text-center">
+          Height
+        </div>
+        <div className="relative w-8 h-64 bg-slate-800/50 rounded border border-slate-700">
+          <div
+            className="absolute bottom-0 left-0 right-0 transition-all duration-100 ease-out rounded"
+            style={{
+              height: `${heightPercentage}%`,
+              backgroundColor: repState === 0 ? '#06B6D4' : repState === 1 ? '#FB923C' : '#22C55E'
+            }}
+          >
+            <div className="absolute inset-0 bg-white/20"></div>
+          </div>
+
+          <div
+            className="absolute left-0 right-0 border-t-2 border-yellow-400 border-dashed"
+            style={{ bottom: `${repTriggerLine}%` }}
+          >
+            <div className="absolute right-full mr-2 -translate-y-1/2 whitespace-nowrap">
+              <span className="text-yellow-400 text-xs font-mono">Rep Line</span>
+            </div>
+          </div>
+
+          <div className="absolute top-0 left-0 right-0 border-t border-slate-600">
+            <span className="absolute left-full ml-2 text-slate-400 text-xs font-mono">100%</span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 border-t border-slate-600">
+            <span className="absolute left-full ml-2 text-slate-400 text-xs font-mono">0%</span>
+          </div>
+        </div>
+
+        <div className="mt-2 text-center">
+          <div className="text-xs font-mono text-slate-400">State</div>
+          <div className={`text-sm font-bold font-mono ${
+            repState === 0 ? 'text-cyan-400' : repState === 1 ? 'text-orange-400' : 'text-green-400'
+          }`}>
+            {repState === 0 ? 'TOP' : repState === 1 ? 'DOWN' : 'UP'}
+          </div>
         </div>
       </div>
     </div>

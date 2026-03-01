@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNeuroStream } from '../hooks/useNeuroStream';
 import { useMockNeuroData } from '../hooks/useMockNeuroData';
 import { useRepAnalyzer } from '../hooks/useRepAnalyzer';
+import { usePoseRepDetector } from '../hooks/usePoseRepDetector';
 import { useAudioAlert } from '../hooks/useAudioAlert';
 import { NeuralVideoFeed } from '../components/NeuralVideoFeed';
 import { NeuralStabilityChart } from '../components/NeuralStabilityChart';
@@ -21,6 +22,7 @@ export const TrainerPage = () => {
   const data = wsData || mockData;
 
   const repAnalyzer = useRepAnalyzer();
+  const poseRepDetector = usePoseRepDetector();
   const { playFinalRepAlert, playSuccessSound } = useAudioAlert();
 
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -32,9 +34,12 @@ export const TrainerPage = () => {
   const [showScoreCard, setShowScoreCard] = useState(false);
   const [finalScore, setFinalScore] = useState(0);
   const [hasTriggeredFinalRep, setHasTriggeredFinalRep] = useState(false);
+  const [poseRepCount, setPoseRepCount] = useState(0);
+  const [heightPercentage, setHeightPercentage] = useState(0);
 
   const calibrationSamplesRef = useRef<number[]>([]);
   const sessionIdRef = useRef<string | null>(null);
+  const lastRepCountRef = useRef<number>(0);
 
   useEffect(() => {
     if (isCalibrating && data) {
@@ -199,7 +204,10 @@ export const TrainerPage = () => {
       setSessionData([]);
       sessionIdRef.current = null;
       repAnalyzer.reset();
+      poseRepDetector.reset();
       setHasTriggeredFinalRep(false);
+      setPoseRepCount(0);
+      lastRepCountRef.current = 0;
     } catch (error) {
       console.error('Failed to end session:', error);
       setIsSessionActive(false);
@@ -207,8 +215,44 @@ export const TrainerPage = () => {
       setSessionData([]);
       sessionIdRef.current = null;
       repAnalyzer.reset();
+      poseRepDetector.reset();
       setHasTriggeredFinalRep(false);
+      setPoseRepCount(0);
+      lastRepCountRef.current = 0;
     }
+  };
+
+  const handlePoseLandmarks = (landmarks: any[]) => {
+    if (!isSessionActive) return;
+
+    const repCompleted = poseRepDetector.updateWithLandmarks(landmarks);
+    const currentRepCount = poseRepDetector.getRepCount();
+
+    if (repCompleted && currentRepCount > lastRepCountRef.current) {
+      setPoseRepCount(currentRepCount);
+      lastRepCountRef.current = currentRepCount;
+
+      const repHistory = poseRepDetector.getRepHistory();
+      const latestRep = repHistory[repHistory.length - 1];
+
+      if (latestRep && data) {
+        const velocity = Math.abs(data.stability - baseline) * 2;
+        repAnalyzer.addDataPoint({
+          velocity,
+          tremor: data.tremor,
+          jitter: data.jitterFrequency,
+          stability: data.stability
+        });
+        repAnalyzer.markRepComplete();
+
+        if (latestRep.isNeuralFatigueRep) {
+          console.log('Neural fatigue detected on rep', currentRepCount);
+        }
+      }
+    }
+
+    const currentHeightPercentage = poseRepDetector.getHeightPercentage(landmarks);
+    setHeightPercentage(currentHeightPercentage);
   };
 
   const startCalibration = () => {
@@ -226,6 +270,9 @@ export const TrainerPage = () => {
       await endSession();
     } else {
       setIsSessionActive(true);
+      poseRepDetector.reset();
+      setPoseRepCount(0);
+      lastRepCountRef.current = 0;
     }
   };
 
@@ -316,6 +363,10 @@ export const TrainerPage = () => {
               stability={data.stability}
               fatigue={data.fatigue}
               isCalibrating={isCalibrating}
+              heightPercentage={heightPercentage}
+              repTriggerLine={poseRepDetector.getRepTriggerLine()}
+              repState={poseRepDetector.getRepState()}
+              onPoseLandmarks={handlePoseLandmarks}
             />
           </div>
 
@@ -380,7 +431,17 @@ export const TrainerPage = () => {
                   <div className="flex justify-between">
                     <span className="text-slate-400">Reps Completed:</span>
                     <span className="text-cyan-400 text-xl font-bold">
-                      {repAnalyzer.getRepStats().totalReps}
+                      {poseRepCount}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Rep State:</span>
+                    <span className={
+                      poseRepDetector.getRepState() === 0 ? 'text-cyan-400' :
+                      poseRepDetector.getRepState() === 1 ? 'text-orange-400' : 'text-green-400'
+                    }>
+                      {poseRepDetector.getRepState() === 0 ? 'TOP' :
+                       poseRepDetector.getRepState() === 1 ? 'BOTTOM' : 'ASCENDING'}
                     </span>
                   </div>
                   {repAnalyzer.getCurrentAnalysis() && (
