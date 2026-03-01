@@ -35,7 +35,8 @@ export const TrainerPage = () => {
   const [finalScore, setFinalScore] = useState(0);
   const [hasTriggeredFinalRep, setHasTriggeredFinalRep] = useState(false);
   const [poseRepCount, setPoseRepCount] = useState(0);
-  const [heightPercentage, setHeightPercentage] = useState(0);
+  const [currentAngle, setCurrentAngle] = useState(180);
+  const [repProgress, setRepProgress] = useState(0);
 
   const calibrationSamplesRef = useRef<number[]>([]);
   const sessionIdRef = useRef<string | null>(null);
@@ -223,6 +224,12 @@ export const TrainerPage = () => {
   };
 
   const handlePoseLandmarks = (landmarks: any[]) => {
+    const angle = poseRepDetector.getCurrentAngle();
+    setCurrentAngle(angle);
+
+    const progress = poseRepDetector.getRepProgress();
+    setRepProgress(progress);
+
     if (!isSessionActive) return;
 
     const repCompleted = poseRepDetector.updateWithLandmarks(landmarks);
@@ -248,11 +255,14 @@ export const TrainerPage = () => {
         if (latestRep.isNeuralFatigueRep) {
           console.log('Neural fatigue detected on rep', currentRepCount);
         }
+
+        if (poseRepDetector.shouldTriggerFinalRep() && !hasTriggeredFinalRep) {
+          setShowFinalRepAlert(true);
+          playFinalRepAlert();
+          setHasTriggeredFinalRep(true);
+        }
       }
     }
-
-    const currentHeightPercentage = poseRepDetector.getHeightPercentage(landmarks);
-    setHeightPercentage(currentHeightPercentage);
   };
 
   const startCalibration = () => {
@@ -317,20 +327,48 @@ export const TrainerPage = () => {
               {isCalibrating ? 'Calibrating...' : 'Calibrate Baseline'}
             </button>
 
-            <button
-              onClick={toggleSession}
-              disabled={isCalibrating}
-              className={`px-6 py-3 rounded-lg font-mono text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
-                isCalibrating
-                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                  : isSessionActive
-                  ? 'bg-red-500 text-white hover:bg-red-400'
-                  : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
-              }`}
-            >
-              <PlayCircle className="w-4 h-4" />
-              {isSessionActive ? 'End Session' : 'Start Session'}
-            </button>
+            <div className="relative">
+              <svg
+                className="absolute inset-0 w-full h-full -rotate-90"
+                style={{ pointerEvents: 'none' }}
+              >
+                <circle
+                  cx="50%"
+                  cy="50%"
+                  r="calc(50% - 2px)"
+                  fill="none"
+                  stroke="rgba(6, 182, 212, 0.2)"
+                  strokeWidth="3"
+                />
+                {isSessionActive && repProgress > 0 && (
+                  <circle
+                    cx="50%"
+                    cy="50%"
+                    r="calc(50% - 2px)"
+                    fill="none"
+                    stroke="#06B6D4"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={`${repProgress * 6.28} 628`}
+                    style={{ transition: 'stroke-dasharray 0.1s ease-out' }}
+                  />
+                )}
+              </svg>
+              <button
+                onClick={toggleSession}
+                disabled={isCalibrating}
+                className={`px-6 py-3 rounded-lg font-mono text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
+                  isCalibrating
+                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                    : isSessionActive
+                    ? 'bg-red-500 text-white hover:bg-red-400'
+                    : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                }`}
+              >
+                <PlayCircle className="w-4 h-4" />
+                {isSessionActive ? 'End Session' : 'Start Session'}
+              </button>
+            </div>
 
             <button
               onClick={() => navigate('/')}
@@ -363,8 +401,7 @@ export const TrainerPage = () => {
               stability={data.stability}
               fatigue={data.fatigue}
               isCalibrating={isCalibrating}
-              heightPercentage={heightPercentage}
-              repTriggerLine={poseRepDetector.getRepTriggerLine()}
+              currentAngle={currentAngle}
               repState={poseRepDetector.getRepState()}
               onPoseLandmarks={handlePoseLandmarks}
             />
@@ -438,10 +475,18 @@ export const TrainerPage = () => {
                     <span className="text-slate-400">Rep State:</span>
                     <span className={
                       poseRepDetector.getRepState() === 0 ? 'text-cyan-400' :
-                      poseRepDetector.getRepState() === 1 ? 'text-orange-400' : 'text-green-400'
+                      poseRepDetector.getRepState() === 1 ? 'text-orange-400' :
+                      poseRepDetector.getRepState() === 2 ? 'text-red-400' : 'text-green-400'
                     }>
-                      {poseRepDetector.getRepState() === 0 ? 'TOP' :
-                       poseRepDetector.getRepState() === 1 ? 'BOTTOM' : 'ASCENDING'}
+                      {poseRepDetector.getRepState() === 0 ? 'READY' :
+                       poseRepDetector.getRepState() === 1 ? 'DESCENDING' :
+                       poseRepDetector.getRepState() === 2 ? 'BOTTOM' : 'ASCENDING'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Elbow Angle:</span>
+                    <span className="text-white font-bold">
+                      {Math.round(currentAngle)}°
                     </span>
                   </div>
                   {repAnalyzer.getCurrentAnalysis() && (

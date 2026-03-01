@@ -6,8 +6,7 @@ interface NeuralVideoFeedProps {
   stability: number;
   fatigue: number;
   isCalibrating: boolean;
-  heightPercentage?: number;
-  repTriggerLine?: number;
+  currentAngle?: number;
   repState?: number;
   onPoseLandmarks?: (landmarks: any[]) => void;
 }
@@ -16,8 +15,7 @@ export const NeuralVideoFeed = ({
   stability,
   fatigue,
   isCalibrating,
-  heightPercentage = 0,
-  repTriggerLine = 40,
+  currentAngle = 180,
   repState = 0,
   onPoseLandmarks
 }: NeuralVideoFeedProps) => {
@@ -63,6 +61,7 @@ export const NeuralVideoFeed = ({
       if (results.poseLandmarks) {
         const skeletonColor = getSkeletonColor(stability, fatigue, isCalibrating);
         drawSkeleton(ctx, results.poseLandmarks, canvas.width, canvas.height, skeletonColor);
+        drawAngleGauge(ctx, results.poseLandmarks, canvas.width, canvas.height, currentAngle, repState);
 
         if (onPoseLandmarks) {
           onPoseLandmarks(results.poseLandmarks);
@@ -163,6 +162,61 @@ export const NeuralVideoFeed = ({
     });
   };
 
+  const drawAngleGauge = (
+    ctx: CanvasRenderingContext2D,
+    landmarks: any[],
+    width: number,
+    height: number,
+    angle: number,
+    state: number
+  ) => {
+    const leftElbow = landmarks[13];
+    const rightElbow = landmarks[14];
+
+    [leftElbow, rightElbow].forEach((elbow) => {
+      if (!elbow || elbow.visibility < 0.5) return;
+
+      const x = elbow.x * width;
+      const y = elbow.y * height;
+      const radius = 50;
+
+      ctx.save();
+
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.3)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const arcColor =
+        state === 0 ? '#06B6D4' :
+        state === 1 ? '#FB923C' :
+        state === 2 ? '#EF4444' :
+        '#22C55E';
+
+      const normalizedAngle = Math.max(0, Math.min(180, angle));
+      const arcAngle = (normalizedAngle / 180) * Math.PI * 2;
+
+      ctx.strokeStyle = arcColor;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + arcAngle);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(x - 30, y - 40, 60, 24);
+
+      ctx.fillStyle = arcColor;
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${Math.round(angle)}°`, x, y - 28);
+
+      ctx.restore();
+    });
+  };
+
   return (
     <div className="relative w-full h-full bg-slate-900 rounded-lg overflow-hidden border-2 border-cyan-500/30">
       <video
@@ -206,48 +260,6 @@ export const NeuralVideoFeed = ({
           stability > 85 ? 'text-cyan-400' : stability > 70 ? 'text-yellow-400' : 'text-red-400'
         }`}>
           {stability.toFixed(1)}%
-        </div>
-      </div>
-
-      <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-slate-950/90 px-3 py-4 rounded-lg border-2 border-cyan-500/50">
-        <div className="text-cyan-400 text-xs font-mono uppercase tracking-wider mb-2 text-center">
-          Height
-        </div>
-        <div className="relative w-8 h-64 bg-slate-800/50 rounded border border-slate-700">
-          <div
-            className="absolute bottom-0 left-0 right-0 transition-all duration-100 ease-out rounded"
-            style={{
-              height: `${heightPercentage}%`,
-              backgroundColor: repState === 0 ? '#06B6D4' : repState === 1 ? '#FB923C' : '#22C55E'
-            }}
-          >
-            <div className="absolute inset-0 bg-white/20"></div>
-          </div>
-
-          <div
-            className="absolute left-0 right-0 border-t-2 border-yellow-400 border-dashed"
-            style={{ bottom: `${repTriggerLine}%` }}
-          >
-            <div className="absolute right-full mr-2 -translate-y-1/2 whitespace-nowrap">
-              <span className="text-yellow-400 text-xs font-mono">Rep Line</span>
-            </div>
-          </div>
-
-          <div className="absolute top-0 left-0 right-0 border-t border-slate-600">
-            <span className="absolute left-full ml-2 text-slate-400 text-xs font-mono">100%</span>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 border-t border-slate-600">
-            <span className="absolute left-full ml-2 text-slate-400 text-xs font-mono">0%</span>
-          </div>
-        </div>
-
-        <div className="mt-2 text-center">
-          <div className="text-xs font-mono text-slate-400">State</div>
-          <div className={`text-sm font-bold font-mono ${
-            repState === 0 ? 'text-cyan-400' : repState === 1 ? 'text-orange-400' : 'text-green-400'
-          }`}>
-            {repState === 0 ? 'TOP' : repState === 1 ? 'DOWN' : 'UP'}
-          </div>
         </div>
       </div>
     </div>

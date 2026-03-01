@@ -1,171 +1,213 @@
 import { useRef, useCallback } from 'react';
 
 export enum RepState {
-  TOP = 0,
-  BOTTOM = 1,
-  COMPLETE = 2
+  READY = 0,
+  DESCENDING = 1,
+  BOTTOM = 2,
+  ASCENDING = 3
 }
 
-interface RepDetectionData {
-  shoulderY: number;
-  wristY: number;
-  shoulderWristDistance: number;
-  verticalDisplacement: number;
-  normalizedHeight: number;
-  velocity: number;
+interface JointAngles {
+  leftElbow: number;
+  rightElbow: number;
+  avgElbow: number;
 }
 
 interface RepInfo {
   repNumber: number;
-  peakVelocity: number;
+  ascentSpeed: number;
   isNeuralFatigueRep: boolean;
   velocityLossPercent: number;
+  bottomAngle: number;
+  topAngle: number;
 }
 
 export const usePoseRepDetector = () => {
-  const repState = useRef<RepState>(RepState.TOP);
+  const repState = useRef<RepState>(RepState.READY);
   const repCount = useRef<number>(0);
-  const topPosition = useRef<number | null>(null);
-  const bottomPosition = useRef<number | null>(null);
-  const lastPosition = useRef<number | null>(null);
+  const lastAngle = useRef<number | null>(null);
   const lastTimestamp = useRef<number>(Date.now());
-  const currentVelocity = useRef<number>(0);
-  const peakAscentVelocity = useRef<number>(0);
-  const baselineVelocity = useRef<number | null>(null);
+  const bottomAngle = useRef<number | null>(null);
+  const topAngle = useRef<number | null>(null);
+  const ascentStartTime = useRef<number | null>(null);
+  const ascentStartAngle = useRef<number | null>(null);
+  const currentAscentSpeed = useRef<number>(0);
+  const baselineAscentSpeed = useRef<number | null>(null);
   const repHistory = useRef<RepInfo[]>([]);
-  const transitionThreshold = useRef<number>(0);
 
-  const DESCENT_THRESHOLD = 0.40;
-  const ASCENT_THRESHOLD = 0.90;
-  const HYSTERESIS = 0.05;
+  const READY_ANGLE_THRESHOLD = 160;
+  const BOTTOM_ANGLE_THRESHOLD = 90;
+  const HYSTERESIS = 5;
   const NEURAL_FATIGUE_THRESHOLD = 0.30;
+  const BASELINE_REPS_COUNT = 2;
 
-  const calculateVerticalMetrics = useCallback((landmarks: any[]): RepDetectionData | null => {
+  const calculateAngle = useCallback((
+    point1: { x: number; y: number },
+    point2: { x: number; y: number },
+    point3: { x: number; y: number }
+  ): number => {
+    const vector1 = {
+      x: point1.x - point2.x,
+      y: point1.y - point2.y
+    };
+
+    const vector2 = {
+      x: point3.x - point2.x,
+      y: point3.y - point2.y
+    };
+
+    const length1 = Math.sqrt(vector1.x * vector1.x + vector1.y * vector1.y);
+    const length2 = Math.sqrt(vector2.x * vector2.x + vector2.y * vector2.y);
+
+    if (length1 === 0 || length2 === 0) return 180;
+
+    const dotProduct = vector1.x * vector2.x + vector1.y * vector2.y;
+    const cosineAngle = dotProduct / (length1 * length2);
+    const clampedCosine = Math.max(-1, Math.min(1, cosineAngle));
+    const angleRad = Math.acos(clampedCosine);
+    const angleDeg = (angleRad * 180) / Math.PI;
+
+    return angleDeg;
+  }, []);
+
+  const calculateJointAngles = useCallback((landmarks: any[]): JointAngles | null => {
     if (!landmarks || landmarks.length < 33) return null;
 
     const leftShoulder = landmarks[11];
-    const rightShoulder = landmarks[12];
+    const leftElbow = landmarks[13];
     const leftWrist = landmarks[15];
+    const rightShoulder = landmarks[12];
+    const rightElbow = landmarks[14];
     const rightWrist = landmarks[16];
 
-    if (!leftShoulder || !rightShoulder || !leftWrist || !rightWrist) return null;
-
-    const avgShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-    const avgWristY = (leftWrist.y + rightWrist.y) / 2;
-
-    const shoulderWristDistance = Math.abs(avgShoulderY - avgWristY);
-
-    if (shoulderWristDistance < 0.01) return null;
-
-    const verticalDisplacement = avgShoulderY;
-
-    const normalizedHeight = verticalDisplacement / shoulderWristDistance;
-
-    const now = Date.now();
-    const deltaTime = (now - lastTimestamp.current) / 1000;
-
-    let velocity = 0;
-    if (lastPosition.current !== null && deltaTime > 0) {
-      const deltaPosition = verticalDisplacement - lastPosition.current;
-      velocity = Math.abs(deltaPosition / deltaTime);
+    if (!leftShoulder || !leftElbow || !leftWrist ||
+        !rightShoulder || !rightElbow || !rightWrist) {
+      return null;
     }
 
-    lastPosition.current = verticalDisplacement;
-    lastTimestamp.current = now;
-    currentVelocity.current = velocity;
+    const leftElbowAngle = calculateAngle(
+      { x: leftShoulder.x, y: leftShoulder.y },
+      { x: leftElbow.x, y: leftElbow.y },
+      { x: leftWrist.x, y: leftWrist.y }
+    );
+
+    const rightElbowAngle = calculateAngle(
+      { x: rightShoulder.x, y: rightShoulder.y },
+      { x: rightElbow.x, y: rightElbow.y },
+      { x: rightWrist.x, y: rightWrist.y }
+    );
+
+    const avgElbow = (leftElbowAngle + rightElbowAngle) / 2;
 
     return {
-      shoulderY: avgShoulderY,
-      wristY: avgWristY,
-      shoulderWristDistance,
-      verticalDisplacement,
-      normalizedHeight,
-      velocity
+      leftElbow: leftElbowAngle,
+      rightElbow: rightElbowAngle,
+      avgElbow
     };
-  }, []);
+  }, [calculateAngle]);
 
-  const processRepDetection = useCallback((metrics: RepDetectionData): boolean => {
+  const processRepDetection = useCallback((angles: JointAngles): boolean => {
     let repCompleted = false;
+    const currentAngle = angles.avgElbow;
+    const now = Date.now();
 
     switch (repState.current) {
-      case RepState.TOP:
-        if (topPosition.current === null) {
-          topPosition.current = metrics.normalizedHeight;
-          transitionThreshold.current = topPosition.current * (1 + DESCENT_THRESHOLD);
+      case RepState.READY:
+        if (currentAngle < READY_ANGLE_THRESHOLD - HYSTERESIS) {
+          repState.current = RepState.DESCENDING;
+          topAngle.current = lastAngle.current || currentAngle;
+          ascentStartTime.current = null;
+          ascentStartAngle.current = null;
+          currentAscentSpeed.current = 0;
         }
+        break;
 
-        if (metrics.normalizedHeight > topPosition.current * (1 + DESCENT_THRESHOLD - HYSTERESIS)) {
+      case RepState.DESCENDING:
+        if (currentAngle < BOTTOM_ANGLE_THRESHOLD) {
           repState.current = RepState.BOTTOM;
-          bottomPosition.current = metrics.normalizedHeight;
-          peakAscentVelocity.current = 0;
+          bottomAngle.current = currentAngle;
+        } else if (currentAngle > READY_ANGLE_THRESHOLD) {
+          repState.current = RepState.READY;
         }
         break;
 
       case RepState.BOTTOM:
-        if (bottomPosition.current === null || metrics.normalizedHeight > bottomPosition.current) {
-          bottomPosition.current = metrics.normalizedHeight;
-        }
-
-        if (topPosition.current !== null &&
-            metrics.normalizedHeight < topPosition.current * (1 + DESCENT_THRESHOLD * (1 - ASCENT_THRESHOLD) + HYSTERESIS)) {
-          repState.current = RepState.COMPLETE;
-
-          if (metrics.velocity > peakAscentVelocity.current) {
-            peakAscentVelocity.current = metrics.velocity;
-          }
-        } else if (metrics.velocity > peakAscentVelocity.current) {
-          peakAscentVelocity.current = metrics.velocity;
+        if (lastAngle.current !== null && currentAngle > lastAngle.current) {
+          repState.current = RepState.ASCENDING;
+          ascentStartTime.current = now;
+          ascentStartAngle.current = currentAngle;
         }
         break;
 
-      case RepState.COMPLETE:
-        if (metrics.velocity > peakAscentVelocity.current) {
-          peakAscentVelocity.current = metrics.velocity;
+      case RepState.ASCENDING:
+        if (ascentStartTime.current && ascentStartAngle.current !== null) {
+          const timeElapsed = (now - ascentStartTime.current) / 1000;
+          const angleChange = currentAngle - ascentStartAngle.current;
+
+          if (timeElapsed > 0 && angleChange > 0) {
+            currentAscentSpeed.current = angleChange / timeElapsed;
+          }
         }
 
-        if (topPosition.current !== null &&
-            metrics.normalizedHeight <= topPosition.current * (1 + HYSTERESIS)) {
+        if (currentAngle > READY_ANGLE_THRESHOLD + HYSTERESIS) {
           repCount.current += 1;
 
           let isNeuralFatigueRep = false;
           let velocityLossPercent = 0;
 
-          if (baselineVelocity.current === null) {
-            baselineVelocity.current = peakAscentVelocity.current;
-          } else if (baselineVelocity.current > 0) {
-            velocityLossPercent = (baselineVelocity.current - peakAscentVelocity.current) / baselineVelocity.current;
+          if (repCount.current <= BASELINE_REPS_COUNT) {
+            if (baselineAscentSpeed.current === null) {
+              baselineAscentSpeed.current = currentAscentSpeed.current;
+            } else {
+              baselineAscentSpeed.current =
+                (baselineAscentSpeed.current + currentAscentSpeed.current) / 2;
+            }
+          } else if (baselineAscentSpeed.current && baselineAscentSpeed.current > 0) {
+            velocityLossPercent =
+              (baselineAscentSpeed.current - currentAscentSpeed.current) / baselineAscentSpeed.current;
             isNeuralFatigueRep = velocityLossPercent >= NEURAL_FATIGUE_THRESHOLD;
           }
 
           repHistory.current.push({
             repNumber: repCount.current,
-            peakVelocity: peakAscentVelocity.current,
+            ascentSpeed: currentAscentSpeed.current,
             isNeuralFatigueRep,
-            velocityLossPercent
+            velocityLossPercent,
+            bottomAngle: bottomAngle.current || 0,
+            topAngle: topAngle.current || 180
           });
 
-          repState.current = RepState.TOP;
-          topPosition.current = metrics.normalizedHeight;
-          bottomPosition.current = null;
-          peakAscentVelocity.current = 0;
+          repState.current = RepState.READY;
+          bottomAngle.current = null;
+          ascentStartTime.current = null;
+          ascentStartAngle.current = null;
+          currentAscentSpeed.current = 0;
           repCompleted = true;
+        } else if (currentAngle < lastAngle.current - HYSTERESIS) {
+          repState.current = RepState.DESCENDING;
+          ascentStartTime.current = null;
+          ascentStartAngle.current = null;
+          currentAscentSpeed.current = 0;
         }
         break;
     }
+
+    lastAngle.current = currentAngle;
+    lastTimestamp.current = now;
 
     return repCompleted;
   }, []);
 
   const updateWithLandmarks = useCallback((landmarks: any[]): boolean => {
-    const metrics = calculateVerticalMetrics(landmarks);
-    if (!metrics) return false;
+    const angles = calculateJointAngles(landmarks);
+    if (!angles) return false;
 
-    return processRepDetection(metrics);
-  }, [calculateVerticalMetrics, processRepDetection]);
+    return processRepDetection(angles);
+  }, [calculateJointAngles, processRepDetection]);
 
-  const getCurrentMetrics = useCallback((landmarks: any[]): RepDetectionData | null => {
-    return calculateVerticalMetrics(landmarks);
-  }, [calculateVerticalMetrics]);
+  const getCurrentAngles = useCallback((landmarks: any[]): JointAngles | null => {
+    return calculateJointAngles(landmarks);
+  }, [calculateJointAngles]);
 
   const getRepState = useCallback((): RepState => {
     return repState.current;
@@ -179,45 +221,72 @@ export const usePoseRepDetector = () => {
     return [...repHistory.current];
   }, []);
 
-  const getHeightPercentage = useCallback((landmarks: any[]): number => {
-    const metrics = calculateVerticalMetrics(landmarks);
-    if (!metrics || topPosition.current === null) return 0;
+  const getCurrentAngle = useCallback((): number => {
+    return lastAngle.current || 180;
+  }, []);
 
-    const range = (topPosition.current * (1 + DESCENT_THRESHOLD)) - topPosition.current;
-    if (range === 0) return 0;
+  const getRepProgress = useCallback((): number => {
+    if (lastAngle.current === null) return 0;
 
-    const currentOffset = metrics.normalizedHeight - topPosition.current;
-    const percentage = Math.max(0, Math.min(100, (currentOffset / range) * 100));
+    const currentAngle = lastAngle.current;
 
-    return percentage;
-  }, [calculateVerticalMetrics]);
+    if (repState.current === RepState.READY) {
+      return 0;
+    }
 
-  const getRepTriggerLine = useCallback((): number => {
-    return DESCENT_THRESHOLD * 100;
+    const topRange = READY_ANGLE_THRESHOLD;
+    const bottomRange = BOTTOM_ANGLE_THRESHOLD;
+    const totalRange = topRange - bottomRange;
+
+    if (repState.current === RepState.DESCENDING || repState.current === RepState.BOTTOM) {
+      const progress = Math.max(0, Math.min(100,
+        ((topRange - currentAngle) / totalRange) * 50
+      ));
+      return progress;
+    }
+
+    if (repState.current === RepState.ASCENDING) {
+      const progress = 50 + Math.max(0, Math.min(50,
+        ((currentAngle - bottomRange) / totalRange) * 50
+      ));
+      return progress;
+    }
+
+    return 0;
+  }, []);
+
+  const shouldTriggerFinalRep = useCallback((): boolean => {
+    if (repCount.current < BASELINE_REPS_COUNT + 1) return false;
+
+    const recentReps = repHistory.current.slice(-3);
+    const fatigueReps = recentReps.filter(rep => rep.isNeuralFatigueRep);
+
+    return fatigueReps.length >= 2;
   }, []);
 
   const reset = useCallback(() => {
-    repState.current = RepState.TOP;
+    repState.current = RepState.READY;
     repCount.current = 0;
-    topPosition.current = null;
-    bottomPosition.current = null;
-    lastPosition.current = null;
+    lastAngle.current = null;
     lastTimestamp.current = Date.now();
-    currentVelocity.current = 0;
-    peakAscentVelocity.current = 0;
-    baselineVelocity.current = null;
+    bottomAngle.current = null;
+    topAngle.current = null;
+    ascentStartTime.current = null;
+    ascentStartAngle.current = null;
+    currentAscentSpeed.current = 0;
+    baselineAscentSpeed.current = null;
     repHistory.current = [];
-    transitionThreshold.current = 0;
   }, []);
 
   return {
     updateWithLandmarks,
-    getCurrentMetrics,
+    getCurrentAngles,
     getRepState,
     getRepCount,
     getRepHistory,
-    getHeightPercentage,
-    getRepTriggerLine,
+    getCurrentAngle,
+    getRepProgress,
+    shouldTriggerFinalRep,
     reset
   };
 };
