@@ -26,6 +26,22 @@ export const NeuralVideoFeed = ({
   const poseRef = useRef<Pose | null>(null);
   const cameraRef = useRef<Camera | null>(null);
 
+  const currentAngleRef = useRef(currentAngle);
+  const repStateRef = useRef(repState);
+  const stabilityRef = useRef(stability);
+  const fatigueRef = useRef(fatigue);
+  const isCalibratingRef = useRef(isCalibrating);
+  const onPoseLandmarksRef = useRef(onPoseLandmarks);
+
+  useEffect(() => {
+    currentAngleRef.current = currentAngle;
+    repStateRef.current = repState;
+    stabilityRef.current = stability;
+    fatigueRef.current = fatigue;
+    isCalibratingRef.current = isCalibrating;
+    onPoseLandmarksRef.current = onPoseLandmarks;
+  }, [currentAngle, repState, stability, fatigue, isCalibrating, onPoseLandmarks]);
+
   useEffect(() => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -59,12 +75,12 @@ export const NeuralVideoFeed = ({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       if (results.poseLandmarks) {
-        const skeletonColor = getSkeletonColor(stability, fatigue, isCalibrating);
+        const skeletonColor = getSkeletonColor(stabilityRef.current, fatigueRef.current, isCalibratingRef.current);
         drawSkeleton(ctx, results.poseLandmarks, canvas.width, canvas.height, skeletonColor);
-        drawAngleGauge(ctx, results.poseLandmarks, canvas.width, canvas.height, currentAngle, repState);
+        drawAngleGauge(ctx, results.poseLandmarks, canvas.width, canvas.height, currentAngleRef.current, repStateRef.current);
 
-        if (onPoseLandmarks) {
-          onPoseLandmarks(results.poseLandmarks);
+        if (onPoseLandmarksRef.current) {
+          onPoseLandmarksRef.current(results.poseLandmarks);
         }
       }
 
