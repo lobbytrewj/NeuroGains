@@ -115,16 +115,20 @@ export const TrainerPage = () => {
   };
 
   const endSession = async () => {
-    const startTime = sessionStartTimeRef.current;
-    if (!startTime || !sessionIdRef.current) {
+    const startTime = sessionStartTimeRef.current ?? sessionStartTime ?? Date.now();
+
+    const resetState = () => {
       setIsSessionActive(false);
       setSessionStartTime(null);
       sessionStartTimeRef.current = null;
       setSessionData([]);
+      sessionIdRef.current = null;
       repAnalyzer.reset();
+      poseRepDetector.reset();
       setHasTriggeredFinalRep(false);
-      return;
-    }
+      setPoseRepCount(0);
+      lastRepCountRef.current = 0;
+    };
 
     try {
       const durationSeconds = Math.floor((Date.now() - startTime) / 1000);
@@ -229,36 +233,17 @@ export const TrainerPage = () => {
 
       if (error) {
         console.error('Database error ending session:', error);
-        throw error;
       }
 
       playSuccessSound();
-
       setFinalScore(hypertrophyScore);
       setShowScoreCard(true);
-
-      setIsSessionActive(false);
-      setSessionStartTime(null);
-      sessionStartTimeRef.current = null;
-      setSessionData([]);
-      sessionIdRef.current = null;
-      repAnalyzer.reset();
-      poseRepDetector.reset();
-      setHasTriggeredFinalRep(false);
-      setPoseRepCount(0);
-      lastRepCountRef.current = 0;
+      resetState();
     } catch (error) {
       console.error('Failed to end session:', error);
-      setIsSessionActive(false);
-      setSessionStartTime(null);
-      sessionStartTimeRef.current = null;
-      setSessionData([]);
-      sessionIdRef.current = null;
-      repAnalyzer.reset();
-      poseRepDetector.reset();
-      setHasTriggeredFinalRep(false);
-      setPoseRepCount(0);
-      lastRepCountRef.current = 0;
+      playSuccessSound();
+      setShowScoreCard(true);
+      resetState();
     }
   };
 

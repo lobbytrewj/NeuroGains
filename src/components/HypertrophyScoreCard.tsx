@@ -33,21 +33,11 @@ export const HypertrophyScoreCard = ({
   });
 
   useEffect(() => {
-    if (totalReps === 0 && isVisible) {
-      const timer = setTimeout(() => {
-        setDisplayData({
-          score,
-          totalReps,
-          hypertrophyReps,
-          avgVelocityLoss,
-          peakTremorAvg,
-          timeUnderNeuralTension
-        });
-        setIsDataReady(true);
-      }, 500);
-
-      return () => clearTimeout(timer);
-    } else if (totalReps > 0) {
+    if (!isVisible) {
+      setIsDataReady(false);
+      return;
+    }
+    const timer = setTimeout(() => {
       setDisplayData({
         score,
         totalReps,
@@ -57,8 +47,9 @@ export const HypertrophyScoreCard = ({
         timeUnderNeuralTension
       });
       setIsDataReady(true);
-    }
-  }, [score, totalReps, hypertrophyReps, avgVelocityLoss, peakTremorAvg, timeUnderNeuralTension, isVisible]);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isVisible]);
 
   if (!isVisible) return null;
   if (!isDataReady) {
