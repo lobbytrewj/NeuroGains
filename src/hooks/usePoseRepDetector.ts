@@ -256,12 +256,12 @@ export const usePoseRepDetector = () => {
   }, []);
 
   const shouldTriggerFinalRep = useCallback((): boolean => {
-    if (repCount.current < BASELINE_REPS_COUNT + 1) return false;
+    if (repCount.current < 5) return false;
 
     const recentReps = repHistory.current.slice(-3);
     const fatigueReps = recentReps.filter(rep => rep.isNeuralFatigueRep);
 
-    return fatigueReps.length >= 2;
+    return fatigueReps.length >= 3;
   }, []);
 
   const reset = useCallback(() => {

@@ -82,14 +82,8 @@ export const TrainerPage = () => {
         jitter: data.jitterFrequency,
         stability: data.stability
       });
-
-      if (!hasTriggeredFinalRep && repAnalyzer.shouldTriggerFinalRep()) {
-        setShowFinalRepAlert(true);
-        playFinalRepAlert();
-        setHasTriggeredFinalRep(true);
-      }
     }
-  }, [isSessionActive, data, baseline, repAnalyzer, hasTriggeredFinalRep, playFinalRepAlert]);
+  }, [isSessionActive, data, baseline, repAnalyzer]);
 
   const initializeSession = async () => {
     try {

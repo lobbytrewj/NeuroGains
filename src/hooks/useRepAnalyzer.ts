@@ -155,25 +155,6 @@ export const useRepAnalyzer = () => {
       stability: data.stability
     };
 
-    const stabilityChange = Math.abs(data.stability - lastStability.current);
-    const now = Date.now();
-
-    if (!inRepPhase.current && stabilityChange > REP_STABILITY_THRESHOLD) {
-      inRepPhase.current = true;
-      repPhaseStartTime.current = now;
-    } else if (inRepPhase.current && stabilityChange < REP_STABILITY_THRESHOLD / 2) {
-      const repDuration = now - repPhaseStartTime.current;
-      if (repDuration >= MIN_REP_DURATION_MS) {
-        const analysis = analyzeCurrentRep();
-        if (analysis) {
-          repHistory.current.push(analysis);
-          repCount.current += 1;
-          currentRepStartIndex.current = repDataBuffer.current.length;
-        }
-        inRepPhase.current = false;
-      }
-    }
-
     lastStability.current = data.stability;
     repDataBuffer.current.push(dataPoint);
     jitterHistory.current.push(data.jitter);
