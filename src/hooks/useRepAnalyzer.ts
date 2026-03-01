@@ -14,13 +14,15 @@ interface RepAnalysis {
   peakTremor: number;
   jitterStdDev: number;
   velocityLoss: number;
+  tremorDeviation: number;
   isInHypertrophyZone: boolean;
   hypertrophyProgress: number;
 }
 
 export const useRepAnalyzer = () => {
   const repDataBuffer = useRef<RepData[]>([]);
-  const firstRepAvgVelocity = useRef<number | null>(null);
+  const baseVelocity = useRef<number | null>(null);
+  const baseTremor = useRef<number | null>(null);
   const repHistory = useRef<RepAnalysis[]>([]);
   const jitterHistory = useRef<number[]>([]);
   const currentRepStartIndex = useRef(0);
@@ -28,14 +30,16 @@ export const useRepAnalyzer = () => {
   const lastStability = useRef<number>(0);
   const inRepPhase = useRef<boolean>(false);
   const repPhaseStartTime = useRef<number>(0);
+  const baselineCalibrated = useRef<boolean>(false);
+  const calibrationReps = useRef<RepAnalysis[]>([]);
 
-  const VELOCITY_THRESHOLD = 0.40;
+  const VELOCITY_LOSS_THRESHOLD = 0.30;
+  const TREMOR_DEVIATION_THRESHOLD = 1.5;
   const JITTER_WINDOW_SIZE = 30;
   const MIN_REP_SAMPLES = 5;
-  const MIN_REPS_BEFORE_ALERT = 5;
-  const HYPERTROPHY_TREMOR_MIN = 8;
-  const HYPERTROPHY_TREMOR_MAX = 12;
-  const FATIGUE_ZONE_THRESHOLD = 85;
+  const CALIBRATION_REPS_COUNT = 2;
+  const VELOCITY_LOSS_ORANGE = 0.20;
+  const VELOCITY_LOSS_GOLD = 0.35;
   const REP_STABILITY_THRESHOLD = 5;
   const MIN_REP_DURATION_MS = 500;
 
@@ -69,23 +73,46 @@ export const useRepAnalyzer = () => {
     if (currentRepData.length < MIN_REP_SAMPLES) return null;
 
     const avgVelocity = currentRepData.reduce((sum, d) => sum + d.velocity, 0) / currentRepData.length;
+    const avgTremor = currentRepData.reduce((sum, d) => sum + d.tremor, 0) / currentRepData.length;
     const peakTremor = Math.max(...currentRepData.map(d => d.tremor));
     const jitterValues = currentRepData.map(d => d.jitter);
     const jitterStdDev = calculateStdDev(jitterValues);
 
-    if (firstRepAvgVelocity.current === null) {
-      firstRepAvgVelocity.current = avgVelocity;
+    if (!baselineCalibrated.current && calibrationReps.current.length < CALIBRATION_REPS_COUNT) {
+      const tempAnalysis: RepAnalysis = {
+        repNumber: repCount.current,
+        avgVelocity,
+        peakTremor,
+        jitterStdDev,
+        velocityLoss: 0,
+        tremorDeviation: 0,
+        isInHypertrophyZone: false,
+        hypertrophyProgress: 0
+      };
+      calibrationReps.current.push(tempAnalysis);
+
+      if (calibrationReps.current.length === CALIBRATION_REPS_COUNT) {
+        baseVelocity.current = calibrationReps.current.reduce((sum, r) => sum + r.avgVelocity, 0) / CALIBRATION_REPS_COUNT;
+        baseTremor.current = calibrationReps.current[0].peakTremor;
+        baselineCalibrated.current = true;
+      }
+
+      return tempAnalysis;
     }
 
-    const velocityLoss = firstRepAvgVelocity.current > 0
-      ? (firstRepAvgVelocity.current - avgVelocity) / firstRepAvgVelocity.current
+    const velocityLoss = baseVelocity.current && baseVelocity.current > 0
+      ? Math.max(0, (baseVelocity.current - avgVelocity) / baseVelocity.current)
       : 0;
 
-    const isInHypertrophyZone = peakTremor >= HYPERTROPHY_TREMOR_MIN && peakTremor <= HYPERTROPHY_TREMOR_MAX;
+    const tremorDeviation = baseTremor.current && baseTremor.current > 0
+      ? avgTremor / baseTremor.current
+      : 1;
 
-    const progressFromVelocity = Math.min(100, Math.max(0, velocityLoss * 100 / 0.45));
-    const progressFromTremor = peakTremor >= HYPERTROPHY_TREMOR_MIN ? Math.min(100, (peakTremor - 8) * 10) : 0;
-    const hypertrophyProgress = Math.max(progressFromVelocity, progressFromTremor);
+    const isInHypertrophyZone = velocityLoss >= VELOCITY_LOSS_THRESHOLD && tremorDeviation >= TREMOR_DEVIATION_THRESHOLD;
+
+    const velocityLossPercentage = velocityLoss * 100;
+    const tremorIncreaseFactor = Math.max(0, (tremorDeviation - 1) * 100);
+    const hypertrophyProgress = Math.min(100, Math.max(0, (velocityLossPercentage + tremorIncreaseFactor) / 2));
 
     const analysis: RepAnalysis = {
       repNumber: repCount.current,
@@ -93,6 +120,7 @@ export const useRepAnalyzer = () => {
       peakTremor,
       jitterStdDev,
       velocityLoss,
+      tremorDeviation,
       isInHypertrophyZone,
       hypertrophyProgress
     };
@@ -101,34 +129,16 @@ export const useRepAnalyzer = () => {
   }, []);
 
   const shouldTriggerFinalRep = useCallback((): boolean => {
-    if (repDataBuffer.current.length < 100) return false;
-    if (repHistory.current.length < MIN_REPS_BEFORE_ALERT) return false;
+    if (!baselineCalibrated.current) return false;
+    if (repHistory.current.length < CALIBRATION_REPS_COUNT) return false;
 
     const analysis = analyzeCurrentRep();
     if (!analysis) return false;
 
-    const recentReps = repHistory.current.slice(-3);
-    if (recentReps.length < 3) return false;
+    const velocityLossExceeded = analysis.velocityLoss >= VELOCITY_LOSS_GOLD;
+    const tremorDeviationExceeded = analysis.tremorDeviation >= TREMOR_DEVIATION_THRESHOLD;
 
-    const velocityDecreasing = recentReps.every((rep, idx) => {
-      if (idx === 0) return true;
-      return rep.avgVelocity <= recentReps[idx - 1].avgVelocity;
-    });
-
-    const significantVelocityLoss = analysis.velocityLoss >= VELOCITY_THRESHOLD;
-    const tremorElevated = analysis.peakTremor >= HYPERTROPHY_TREMOR_MIN;
-    const jitterSpiking = detectNonLinearJitter();
-    const inDangerZone = analysis.hypertrophyProgress >= FATIGUE_ZONE_THRESHOLD;
-
-    const criticalConditionsMet = [
-      significantVelocityLoss,
-      tremorElevated,
-      jitterSpiking,
-      velocityDecreasing,
-      inDangerZone
-    ].filter(Boolean).length;
-
-    return criticalConditionsMet >= 3;
+    return velocityLossExceeded && tremorDeviationExceeded;
   }, [analyzeCurrentRep]);
 
   const addDataPoint = useCallback((data: {
@@ -185,16 +195,20 @@ export const useRepAnalyzer = () => {
 
   const getHypertrophyEfficiencyScore = useCallback((): number => {
     if (repHistory.current.length === 0) return 0;
+    if (!baselineCalibrated.current) return 0;
 
-    const hypertrophyReps = repHistory.current.filter(rep => rep.isInHypertrophyZone).length;
-    const totalReps = repHistory.current.length;
+    const validReps = repHistory.current.slice(CALIBRATION_REPS_COUNT);
+    if (validReps.length === 0) return 0;
 
-    const efficiency = (hypertrophyReps / totalReps) * 100;
+    const avgVelocityLoss = validReps.reduce((sum, rep) => sum + rep.velocityLoss, 0) / validReps.length;
+    const avgTremorDeviation = validReps.reduce((sum, rep) => sum + rep.tremorDeviation, 0) / validReps.length;
 
-    const avgVelocityLoss = repHistory.current.reduce((sum, rep) => sum + rep.velocityLoss, 0) / totalReps;
-    const velocityBonus = Math.min(20, avgVelocityLoss * 50);
+    const velocityLossPercentage = Math.min(100, avgVelocityLoss * 100);
+    const tremorIncreaseFactor = Math.min(100, Math.max(0, (avgTremorDeviation - 1) * 100));
 
-    return Math.min(100, efficiency + velocityBonus);
+    const score = (velocityLossPercentage + tremorIncreaseFactor) / 2;
+
+    return Math.max(0, Math.min(100, score));
   }, []);
 
   const getCurrentAnalysis = useCallback((): RepAnalysis | null => {
@@ -203,7 +217,8 @@ export const useRepAnalyzer = () => {
 
   const reset = useCallback(() => {
     repDataBuffer.current = [];
-    firstRepAvgVelocity.current = null;
+    baseVelocity.current = null;
+    baseTremor.current = null;
     repHistory.current = [];
     jitterHistory.current = [];
     currentRepStartIndex.current = 0;
@@ -211,7 +226,22 @@ export const useRepAnalyzer = () => {
     lastStability.current = 0;
     inRepPhase.current = false;
     repPhaseStartTime.current = 0;
+    baselineCalibrated.current = false;
+    calibrationReps.current = [];
   }, []);
+
+  const isBaselineCalibrated = useCallback((): boolean => {
+    return baselineCalibrated.current;
+  }, []);
+
+  const getColorZone = useCallback((): 'normal' | 'warning' | 'critical' => {
+    const analysis = analyzeCurrentRep();
+    if (!analysis || !baselineCalibrated.current) return 'normal';
+
+    if (analysis.velocityLoss >= VELOCITY_LOSS_GOLD) return 'critical';
+    if (analysis.velocityLoss >= VELOCITY_LOSS_ORANGE) return 'warning';
+    return 'normal';
+  }, [analyzeCurrentRep]);
 
   const getRepStats = useCallback(() => {
     return {
@@ -234,6 +264,8 @@ export const useRepAnalyzer = () => {
     getHypertrophyEfficiencyScore,
     getRepStats,
     reset,
+    isBaselineCalibrated,
+    getColorZone,
     repCount: repCount.current
   };
 };

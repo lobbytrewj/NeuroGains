@@ -135,6 +135,17 @@ export const TrainerPage = () => {
 
       const repStats = repAnalyzer.getRepStats();
       const hypertrophyScore = repAnalyzer.getHypertrophyEfficiencyScore();
+      const currentAnalysis = repAnalyzer.getCurrentAnalysis();
+
+      const baselineVelocity = sessionData.length > 0 && repStats.totalReps >= 2
+        ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, repStats.totalReps)) * 2)
+            .reduce((sum, d) => sum + Math.abs(d.stability - baseline) * 2, 0) /
+            Math.min(sessionData.length, Math.floor(sessionData.length / Math.max(1, repStats.totalReps)) * 2)
+        : null;
+
+      const baselineTremor = sessionData.length > 0
+        ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, repStats.totalReps || 1)))[0]?.tremor || null
+        : null;
 
       console.log('Ending session with stats:', {
         id: sessionIdRef.current,
@@ -145,7 +156,10 @@ export const TrainerPage = () => {
         maxStability,
         dataPoints: sessionData.length,
         repStats,
-        hypertrophyScore
+        hypertrophyScore,
+        baselineVelocity,
+        baselineTremor,
+        baselineCalibrated: repAnalyzer.isBaselineCalibrated()
       });
 
       const { error } = await supabase
@@ -162,6 +176,10 @@ export const TrainerPage = () => {
           hypertrophy_efficiency_score: hypertrophyScore,
           avg_velocity_loss: repStats.avgVelocityLoss,
           peak_tremor_avg: repStats.peakTremorAvg,
+          baseline_velocity: baselineVelocity,
+          baseline_tremor: baselineTremor,
+          baseline_calibrated: repAnalyzer.isBaselineCalibrated(),
+          tremor_deviation_avg: currentAnalysis?.tremorDeviation || 0,
         })
         .eq('id', sessionIdRef.current);
 
@@ -315,6 +333,8 @@ export const TrainerPage = () => {
           <HypertrophyZoneIndicator
             progress={repAnalyzer.getCurrentAnalysis()?.hypertrophyProgress || 0}
             isActive={isSessionActive}
+            velocityLoss={repAnalyzer.getCurrentAnalysis()?.velocityLoss || 0}
+            isCalibrated={repAnalyzer.isBaselineCalibrated()}
           />
 
           <FatigueGauge fatigue={data.fatigue} jitterFrequency={data.jitterFrequency} />
@@ -330,12 +350,20 @@ export const TrainerPage = () => {
                   {isSessionActive ? 'ACTIVE' : 'STANDBY'}
                 </span>
               </div>
+              {isSessionActive && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Baseline:</span>
+                  <span className={repAnalyzer.isBaselineCalibrated() ? 'text-green-400' : 'text-yellow-400'}>
+                    {repAnalyzer.isBaselineCalibrated() ? '✓ CALIBRATED' : 'CALIBRATING...'}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
-                <span className="text-slate-400">Baseline:</span>
+                <span className="text-slate-400">Baseline Stability:</span>
                 <span className="text-white">{baseline.toFixed(1)}%</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Current:</span>
+                <span className="text-slate-400">Current Stability:</span>
                 <span className="text-white">{data.stability.toFixed(1)}%</span>
               </div>
               <div className="flex justify-between">
