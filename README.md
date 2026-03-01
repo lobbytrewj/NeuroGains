@@ -76,6 +76,36 @@ A Supabase project with:
 
 The application uses Supabase PostgreSQL with the following schema:
 
+```
+CREATE TABLE IF NOT EXISTS sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id),
+  start_time timestamptz DEFAULT now(),
+  end_time timestamptz,
+  duration_seconds integer DEFAULT 0,
+  average_stability numeric DEFAULT 0,
+  peak_fatigue numeric DEFAULT 0,
+  min_stability numeric DEFAULT 100,
+  max_stability numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS session_metrics (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL REFERENCES sessions(id),
+  timestamp timestamptz DEFAULT now(),
+  stability numeric NOT NULL,
+  fatigue numeric NOT NULL,
+  jitter_frequency numeric NOT NULL,
+  tremor numeric NOT NULL
+);
+
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE session_metrics ENABLE ROW LEVEL SECURITY;
+```
+After putting this in the SQL editor of the Supabase make sure to copy all the SQL queries in supabase/migrations and run them in the SQL Editor. 
+
 ## Project Structure
 
 ```
