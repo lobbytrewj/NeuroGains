@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Activity, Zap, Target, Clock, ArrowRight } from 'lucide-react';
 import { supabase, Session } from '../lib/supabase';
 import { SessionDeepDive } from '../components/SessionDeepDive';
+import { CNSReadinessGauge } from '../components/CNSReadinessGauge';
+import { NeuralTrendChart } from '../components/NeuralTrendChart';
+import { AIInsightCards } from '../components/AIInsightCards';
+import { ExerciseHeatmap } from '../components/ExerciseHeatmap';
 
 export const HomePage = () => {
   const navigate = useNavigate();
@@ -172,6 +176,19 @@ export const HomePage = () => {
           </div>
           <div className="text-3xl font-mono font-bold text-white">{stats.totalDuration}m</div>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <AIInsightCards sessions={sessions} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <CNSReadinessGauge sessions={sessions} />
+        <ExerciseHeatmap sessions={sessions} />
+      </div>
+
+      <div className="mb-8">
+        <NeuralTrendChart sessions={sessions} />
       </div>
 
       <div className="bg-slate-900 rounded-lg border-2 border-cyan-500/30 p-6">
