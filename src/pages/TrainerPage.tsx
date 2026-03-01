@@ -177,7 +177,7 @@ export const TrainerPage = () => {
         const tremorScore = sessionData.length > 0
           ? Math.min(100, (sessionData.reduce((sum, d) => sum + d.tremor, 0) / sessionData.length) * 8)
           : 0;
-        hypertrophyScore = Math.round((stabilityLoss * 40 + fatigueScore * 0.3 + tremorScore * 0.3));
+        hypertrophyScore = Math.round((stabilityLoss * 100 * 0.4 + fatigueScore * 0.3 + tremorScore * 0.3));
       }
 
       console.log('Ending session with stats:', {
