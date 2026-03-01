@@ -37,6 +37,13 @@ export const TrainerPage = () => {
   const [poseRepCount, setPoseRepCount] = useState(0);
   const [currentAngle, setCurrentAngle] = useState(180);
   const [repProgress, setRepProgress] = useState(0);
+  const [capturedSessionMetrics, setCapturedSessionMetrics] = useState<{
+    totalReps: number;
+    hypertrophyReps: number;
+    avgVelocityLoss: number;
+    peakTremorAvg: number;
+    timeUnderNeuralTension: number;
+  } | null>(null);
 
   const calibrationSamplesRef = useRef<number[]>([]);
   const sessionIdRef = useRef<string | null>(null);
@@ -153,6 +160,10 @@ export const TrainerPage = () => {
         ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, repStats.totalReps || 1)))[0]?.tremor || null
         : null;
 
+      const timeUnderNeuralTension = sessionData.filter(
+        d => d.tremor >= 8 && d.tremor <= 12
+      ).length * 0.1;
+
       console.log('Ending session with stats:', {
         id: sessionIdRef.current,
         durationSeconds,
@@ -165,7 +176,16 @@ export const TrainerPage = () => {
         hypertrophyScore,
         baselineVelocity,
         baselineTremor,
+        timeUnderNeuralTension,
         baselineCalibrated: repAnalyzer.isBaselineCalibrated()
+      });
+
+      setCapturedSessionMetrics({
+        totalReps: repStats.totalReps,
+        hypertrophyReps: repStats.hypertrophyReps,
+        avgVelocityLoss: repStats.avgVelocityLoss,
+        peakTremorAvg: repStats.peakTremorAvg,
+        timeUnderNeuralTension: Math.round(timeUnderNeuralTension)
       });
 
       const { error } = await supabase
@@ -517,16 +537,18 @@ export const TrainerPage = () => {
         onDismiss={() => setShowFinalRepAlert(false)}
       />
 
-      {showScoreCard && (
+      {showScoreCard && capturedSessionMetrics && (
         <HypertrophyScoreCard
           score={finalScore}
-          totalReps={repAnalyzer.getRepStats().totalReps}
-          hypertrophyReps={repAnalyzer.getRepStats().hypertrophyReps}
-          avgVelocityLoss={repAnalyzer.getRepStats().avgVelocityLoss}
-          peakTremorAvg={repAnalyzer.getRepStats().peakTremorAvg}
+          totalReps={capturedSessionMetrics.totalReps}
+          hypertrophyReps={capturedSessionMetrics.hypertrophyReps}
+          avgVelocityLoss={capturedSessionMetrics.avgVelocityLoss}
+          peakTremorAvg={capturedSessionMetrics.peakTremorAvg}
+          timeUnderNeuralTension={capturedSessionMetrics.timeUnderNeuralTension}
           isVisible={showScoreCard}
           onClose={() => {
             setShowScoreCard(false);
+            setCapturedSessionMetrics(null);
             navigate('/');
           }}
         />

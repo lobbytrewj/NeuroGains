@@ -1,4 +1,5 @@
-import { Award, TrendingUp, Zap, Target } from 'lucide-react';
+import { Award, TrendingUp, Zap, Target, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface HypertrophyScoreCardProps {
   score: number;
@@ -6,6 +7,7 @@ interface HypertrophyScoreCardProps {
   hypertrophyReps: number;
   avgVelocityLoss: number;
   peakTremorAvg: number;
+  timeUnderNeuralTension: number;
   isVisible: boolean;
   onClose: () => void;
 }
@@ -16,10 +18,62 @@ export const HypertrophyScoreCard = ({
   hypertrophyReps,
   avgVelocityLoss,
   peakTremorAvg,
+  timeUnderNeuralTension,
   isVisible,
   onClose
 }: HypertrophyScoreCardProps) => {
+  const [isDataReady, setIsDataReady] = useState(false);
+  const [displayData, setDisplayData] = useState({
+    score,
+    totalReps,
+    hypertrophyReps,
+    avgVelocityLoss,
+    peakTremorAvg,
+    timeUnderNeuralTension
+  });
+
+  useEffect(() => {
+    if (totalReps === 0 && isVisible) {
+      const timer = setTimeout(() => {
+        setDisplayData({
+          score,
+          totalReps,
+          hypertrophyReps,
+          avgVelocityLoss,
+          peakTremorAvg,
+          timeUnderNeuralTension
+        });
+        setIsDataReady(true);
+      }, 500);
+
+      return () => clearTimeout(timer);
+    } else if (totalReps > 0) {
+      setDisplayData({
+        score,
+        totalReps,
+        hypertrophyReps,
+        avgVelocityLoss,
+        peakTremorAvg,
+        timeUnderNeuralTension
+      });
+      setIsDataReady(true);
+    }
+  }, [score, totalReps, hypertrophyReps, avgVelocityLoss, peakTremorAvg, timeUnderNeuralTension, isVisible]);
+
   if (!isVisible) return null;
+  if (!isDataReady) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-slate-700 rounded-2xl p-8 max-w-2xl w-full shadow-2xl">
+          <div className="flex items-center justify-center">
+            <div className="text-cyan-400 text-xl font-mono animate-pulse">
+              CALCULATING METRICS...
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const getScoreRating = (score: number) => {
     if (score >= 90) return { label: 'Elite', color: 'text-yellow-400', bg: 'bg-yellow-500/20' };
@@ -29,8 +83,8 @@ export const HypertrophyScoreCard = ({
     return { label: 'Needs Work', color: 'text-red-400', bg: 'bg-red-500/20' };
   };
 
-  const rating = getScoreRating(score);
-  const efficiencyPercent = totalReps > 0 ? (hypertrophyReps / totalReps) * 100 : 0;
+  const rating = getScoreRating(displayData.score);
+  const efficiencyPercent = displayData.totalReps > 0 ? (displayData.hypertrophyReps / displayData.totalReps) * 100 : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -63,13 +117,13 @@ export const HypertrophyScoreCard = ({
           <div className="relative h-3 bg-slate-700/50 rounded-full overflow-hidden">
             <div
               className={`absolute inset-y-0 left-0 bg-gradient-to-r from-green-500 to-yellow-400 rounded-full transition-all duration-1000 ease-out`}
-              style={{ width: `${Math.min(100, score)}%` }}
+              style={{ width: `${Math.min(100, displayData.score)}%` }}
             >
               <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
             </div>
           </div>
           <div className="mt-2 text-right">
-            <span className={`text-4xl font-black ${rating.color}`}>{Math.round(score)}</span>
+            <span className={`text-4xl font-black ${rating.color}`}>{Math.round(displayData.score)}</span>
             <span className="text-slate-400 text-xl">/100</span>
           </div>
         </div>
@@ -80,7 +134,7 @@ export const HypertrophyScoreCard = ({
               <Target className="w-4 h-4 text-blue-400" />
               <span className="text-xs text-slate-400 font-medium">Total Reps</span>
             </div>
-            <p className="text-2xl font-bold text-white">{totalReps}</p>
+            <p className="text-2xl font-bold text-white">{displayData.totalReps}</p>
           </div>
 
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
@@ -88,9 +142,20 @@ export const HypertrophyScoreCard = ({
               <Zap className="w-4 h-4 text-yellow-400" />
               <span className="text-xs text-slate-400 font-medium">Effective Reps</span>
             </div>
-            <p className="text-2xl font-bold text-yellow-400">{hypertrophyReps}</p>
+            <p className="text-2xl font-bold text-yellow-400">{displayData.hypertrophyReps}</p>
             <p className="text-xs text-slate-500 mt-1">
-              {Math.round(efficiencyPercent)}% in hypertrophy zone
+              {Math.round(efficiencyPercent)}% efficiency
+            </p>
+          </div>
+
+          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs text-slate-400 font-medium">Neural Tension</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{displayData.timeUnderNeuralTension}s</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Time in optimal zone
             </p>
           </div>
 
@@ -99,22 +164,9 @@ export const HypertrophyScoreCard = ({
               <TrendingUp className="w-4 h-4 text-green-400" />
               <span className="text-xs text-slate-400 font-medium">Velocity Loss</span>
             </div>
-            <p className="text-2xl font-bold text-white">{Math.round(avgVelocityLoss * 100)}%</p>
+            <p className="text-2xl font-bold text-white">{Math.round(displayData.avgVelocityLoss * 100)}%</p>
             <p className="text-xs text-slate-500 mt-1">
-              {avgVelocityLoss >= 0.3 ? 'Optimal fatigue' : 'Room for more'}
-            </p>
-          </div>
-
-          <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-2">
-              <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <span className="text-xs text-slate-400 font-medium">Avg Tremor (Hz)</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{peakTremorAvg.toFixed(1)}</p>
-            <p className="text-xs text-slate-500 mt-1">
-              {peakTremorAvg >= 8 && peakTremorAvg <= 12 ? 'Optimal range' : 'Outside range'}
+              {displayData.avgVelocityLoss >= 0.3 ? 'Optimal fatigue' : 'Room for more'}
             </p>
           </div>
         </div>
@@ -127,9 +179,9 @@ export const HypertrophyScoreCard = ({
             Performance Insights
           </h3>
           <p className="text-sm leading-relaxed">
-            {score >= 75 ? (
+            {displayData.score >= 75 ? (
               <>Your set demonstrates excellent mechanical tension and motor unit recruitment. You stopped at the optimal point before systemic fatigue compromised recovery.</>
-            ) : score >= 60 ? (
+            ) : displayData.score >= 60 ? (
               <>Good effort. Consider pushing closer to failure while monitoring tremor frequency to maximize growth stimulus.</>
             ) : (
               <>Focus on maintaining form while pushing into the 8-12Hz tremor zone. This indicates maximum motor unit taxation without excess fatigue.</>
