@@ -1,4 +1,4 @@
-##NeuroGains v1.0 | AI-Powered Hypertrophy Optimization System
+## NeuroGains v1.0 | AI-Powered Hypertrophy Optimization System
 
 An advanced neural-feedback training application that analyzes real-time biometric data to optimize hypertrophy training. This project features a React frontend with real-time data visualization and a Supabase backend for session tracking and analytics.
 
