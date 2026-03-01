@@ -1,4 +1,4 @@
-# NeuroGains
+**NeuroGains v1.0 ** | AI-Powered Hypertrophy Optimization System
 
 An advanced neural-feedback training application that analyzes real-time biometric data to optimize hypertrophy training. This project features a React frontend with real-time data visualization and a Supabase backend for session tracking and analytics.
 
@@ -76,34 +76,6 @@ A Supabase project with:
 
 The application uses Supabase PostgreSQL with the following schema:
 
-#### Sessions Table
-Stores workout session data with comprehensive metrics:
-
-```sql
-sessions
-├── id (uuid, primary key)
-├── user_id (uuid, nullable)
-├── start_time (timestamptz)
-├── end_time (timestamptz)
-├── duration_seconds (integer)
-├── average_stability (numeric)
-├── min_stability (numeric)
-├── max_stability (numeric)
-├── peak_fatigue (numeric)
-├── total_reps (integer)
-├── hypertrophy_reps (integer)
-├── hypertrophy_efficiency_score (numeric)
-├── avg_velocity_loss (numeric)
-├── peak_tremor_avg (numeric)
-└── created_at (timestamptz)
-```
-
-#### Migration Files
-- `20260301024600_fix_sessions_table_for_anonymous_use.sql` - Enables public access for demo purposes
-- `20260301030354_add_rep_tracking_to_sessions.sql` - Adds rep-level hypertrophy tracking fields
-
-To apply migrations, use the Supabase CLI or dashboard to run the SQL files in the `supabase/migrations/` directory.
-
 ## Project Structure
 
 ```
@@ -154,8 +126,6 @@ neurogains/
 - Session recording and management
 - Calibration system for baseline stability
 - Final rep alert integration
-
-### Custom Hooks
 
 **useRepAnalyzer** (`src/hooks/useRepAnalyzer.ts`)
 - Advanced rep detection algorithm
@@ -217,13 +187,6 @@ npm run typecheck
 npm run lint
 ```
 
-### Development Mode
-
-The application supports both live neural data (via WebSocket) and mock data modes:
-
-- **Live Mode**: Connects to WebSocket server at `ws://localhost:8000/neuro-stream`
-- **Mock Mode**: Automatically falls back to simulated data when WebSocket is unavailable
-
 ## Core Algorithms
 
 ### Rep Detection Algorithm
@@ -250,21 +213,6 @@ Velocity Bonus = min(20, Avg Velocity Loss × 50)
 Final Score = min(100, Efficiency + Velocity Bonus)
 ```
 
-## Database Security
-
-Current configuration uses public access for demo purposes. For production:
-
-1. **Enable user authentication** using Supabase Auth
-2. **Update RLS policies** to restrict access:
-   ```sql
-   CREATE POLICY "Users can view own sessions"
-     ON sessions FOR SELECT
-     TO authenticated
-     USING (auth.uid() = user_id);
-   ```
-3. **Require authenticated users** for all operations
-4. **Add user_id validation** in application logic
-
 ## Future Enhancements
 
 - **MediaPipe Integration**: Real-time pose estimation and form analysis
@@ -274,49 +222,3 @@ Current configuration uses public access for demo purposes. For production:
 - **Social Features**: Share sessions and compete with training partners
 - **AI-Powered Coaching**: Personalized training recommendations based on historical data
 
-## Performance Considerations
-
-- Session data is buffered in memory during active sessions
-- Real-time charts use windowed data to maintain performance
-- Database queries are optimized with indexes on `created_at` and `user_id`
-- WebSocket reconnection uses exponential backoff
-
-## Troubleshooting
-
-### WebSocket Connection Issues
-- Verify backend server is running on port 8000
-- Check firewall settings allow WebSocket connections
-- Application automatically falls back to mock data mode
-
-### Database Connection Issues
-- Verify `.env` contains correct Supabase credentials
-- Check Supabase project is active and accessible
-- Review browser console for specific error messages
-
-### Build Errors
-- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-- Verify Node.js version is 18 or higher: `node --version`
-- Run type checking to identify TypeScript issues: `npm run typecheck`
-
-## Contributing
-
-Contributions are welcome. Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch
-3. Follow existing code style and conventions
-4. Add TypeScript types for all new code
-5. Test thoroughly before submitting pull request
-6. Update documentation as needed
-
-## License
-
-This project is proprietary software. All rights reserved.
-
-## Contact
-
-For questions, issues, or feature requests, please open an issue on the repository or contact the development team.
-
----
-
-**NeuroGains v2.0** | AI-Powered Hypertrophy Optimization System
