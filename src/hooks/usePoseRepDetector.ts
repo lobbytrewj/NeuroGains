@@ -256,7 +256,7 @@ export const usePoseRepDetector = () => {
   }, []);
 
   const shouldTriggerFinalRep = useCallback((): boolean => {
-    if (repCount.current < 5) return false;
+    if (repCount.current < 4) return false;
 
     const recentReps = repHistory.current.slice(-3);
     const fatigueReps = recentReps.filter(rep => rep.isNeuralFatigueRep);
