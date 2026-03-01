@@ -94,8 +94,8 @@ export const HomePage = () => {
       id: session.id,
       date: formatDate(session.created_at),
       duration: formatDuration(session.duration_seconds),
-      reps: Math.floor(session.duration_seconds / 5),
-      hypertrophyScore: Math.round(session.average_stability * 0.85),
+      reps: session.total_reps || Math.floor(session.duration_seconds / 5),
+      hypertrophyScore: session.hypertrophy_efficiency_score || Math.round(session.average_stability * 0.85),
       stabilityScore: Math.round(session.average_stability),
       timeSeriesData: generateMockTimeSeriesData(session.duration_seconds),
       failureSnapshot: session.peak_fatigue > 70 ? {
@@ -104,8 +104,8 @@ export const HomePage = () => {
         timestamp: Math.floor(session.duration_seconds * 800),
         posture: 'Bottom of rep, eccentric phase complete',
       } : undefined,
-      effectiveReps: Math.floor(session.duration_seconds / 6),
-      timeUnderNeuralTension: Math.floor(session.duration_seconds * 0.6),
+      effectiveReps: session.hypertrophy_reps || Math.floor(session.duration_seconds / 6),
+      timeUnderNeuralTension: session.time_under_neural_tension || Math.floor(session.duration_seconds * 0.6),
       allTimeBestStability: stats.bestStability,
     };
     setSelectedSession(mockSessionData);
