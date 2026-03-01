@@ -212,6 +212,8 @@ Efficiency = (Hypertrophy Reps / Total Reps) × 100
 Velocity Bonus = min(20, Avg Velocity Loss × 50)
 Final Score = min(100, Efficiency + Velocity Bonus)
 ```
+## Research Articles Used
+https://www.semanticscholar.org/paper/Effects-of-velocity-loss-during-resistance-training-Pareja-Blanco-Rodr%C3%ADguez-Rosell/faa6ca3add9391ecc8cb9a07973a07333fbaf921#:~:text=Pareja%2DBlancoJulian%20Alcazar%20%2B7,Highly%20Influenced
 
 ## Future Enhancements
 
