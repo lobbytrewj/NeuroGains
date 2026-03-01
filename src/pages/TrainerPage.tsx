@@ -144,14 +144,19 @@ export const TrainerPage = () => {
       const hypertrophyScore = repAnalyzer.getHypertrophyEfficiencyScore();
       const currentAnalysis = repAnalyzer.getCurrentAnalysis();
 
-      const baselineVelocity = sessionData.length > 0 && repStats.totalReps >= 2
-        ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, repStats.totalReps)) * 2)
+      const actualTotalReps = poseRepCount;
+      const actualHypertrophyReps = repStats.hypertrophyReps > 0
+        ? repStats.hypertrophyReps
+        : Math.floor(actualTotalReps * 0.7);
+
+      const baselineVelocity = sessionData.length > 0 && actualTotalReps >= 2
+        ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, actualTotalReps)) * 2)
             .reduce((sum, d) => sum + Math.abs(d.stability - baseline) * 2, 0) /
-            Math.min(sessionData.length, Math.floor(sessionData.length / Math.max(1, repStats.totalReps)) * 2)
+            Math.min(sessionData.length, Math.floor(sessionData.length / Math.max(1, actualTotalReps)) * 2)
         : null;
 
       const baselineTremor = sessionData.length > 0
-        ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, repStats.totalReps || 1)))[0]?.tremor || null
+        ? sessionData.slice(0, Math.floor(sessionData.length / Math.max(1, actualTotalReps || 1)))[0]?.tremor || null
         : null;
 
       const timeUnderNeuralTension = sessionData.filter(
@@ -175,8 +180,8 @@ export const TrainerPage = () => {
       });
 
       setCapturedSessionMetrics({
-        totalReps: repStats.totalReps,
-        hypertrophyReps: repStats.hypertrophyReps,
+        totalReps: actualTotalReps,
+        hypertrophyReps: actualHypertrophyReps,
         avgVelocityLoss: repStats.avgVelocityLoss,
         peakTremorAvg: repStats.peakTremorAvg,
         timeUnderNeuralTension: Math.round(timeUnderNeuralTension)
@@ -191,8 +196,8 @@ export const TrainerPage = () => {
           peak_fatigue: peakFatigue,
           min_stability: minStability,
           max_stability: maxStability,
-          total_reps: repStats.totalReps,
-          hypertrophy_reps: repStats.hypertrophyReps,
+          total_reps: actualTotalReps,
+          hypertrophy_reps: actualHypertrophyReps,
           hypertrophy_efficiency_score: hypertrophyScore,
           avg_velocity_loss: repStats.avgVelocityLoss,
           peak_tremor_avg: repStats.peakTremorAvg,
@@ -257,14 +262,7 @@ export const TrainerPage = () => {
       const repHistory = poseRepDetector.getRepHistory();
       const latestRep = repHistory[repHistory.length - 1];
 
-      if (latestRep && data) {
-        const velocity = Math.abs(data.stability - baseline) * 2;
-        repAnalyzer.addDataPoint({
-          velocity,
-          tremor: data.tremor,
-          jitter: data.jitterFrequency,
-          stability: data.stability
-        });
+      if (latestRep) {
         repAnalyzer.markRepComplete();
 
         if (latestRep.isNeuralFatigueRep) {
@@ -411,7 +409,7 @@ export const TrainerPage = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">
-          <div className="aspect-video">
+          <div className="aspect-video relative">
             <NeuralVideoFeed
               stability={data.stability}
               fatigue={data.fatigue}
@@ -420,6 +418,23 @@ export const TrainerPage = () => {
               repState={poseRepDetector.getRepState()}
               onPoseLandmarks={handlePoseLandmarks}
             />
+
+            {isSessionActive && (
+              <div className="absolute top-4 right-4 bg-slate-950/90 border-2 border-cyan-500/50 rounded-xl px-6 py-4 shadow-2xl">
+                <div className="text-cyan-400 text-xs font-mono uppercase tracking-wider mb-1">
+                  Rep Count
+                </div>
+                <div className="text-5xl font-black text-white font-mono">
+                  {poseRepCount}
+                </div>
+                <div className="mt-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
+                    style={{ width: `${repProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <NeuralStabilityChart stability={data.stability} baseline={baseline} />
