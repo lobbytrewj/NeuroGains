@@ -238,6 +238,8 @@ export const TrainerPage = () => {
   };
 
   const handlePoseLandmarks = (landmarks: any[]) => {
+    const repCompleted = poseRepDetector.updateWithLandmarks(landmarks);
+
     const angle = poseRepDetector.getCurrentAngle();
     setCurrentAngle(angle);
 
@@ -246,7 +248,6 @@ export const TrainerPage = () => {
 
     if (!isSessionActive) return;
 
-    const repCompleted = poseRepDetector.updateWithLandmarks(landmarks);
     const currentRepCount = poseRepDetector.getRepCount();
 
     if (repCompleted && currentRepCount > lastRepCountRef.current) {
