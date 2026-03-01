@@ -47,6 +47,7 @@ export const TrainerPage = () => {
 
   const calibrationSamplesRef = useRef<number[]>([]);
   const sessionIdRef = useRef<string | null>(null);
+  const sessionStartTimeRef = useRef<number | null>(null);
   const lastRepCountRef = useRef<number>(0);
 
   useEffect(() => {
@@ -66,13 +67,15 @@ export const TrainerPage = () => {
 
   useEffect(() => {
     if (isSessionActive && !sessionStartTime) {
-      setSessionStartTime(Date.now());
+      const now = Date.now();
+      setSessionStartTime(now);
+      sessionStartTimeRef.current = now;
       initializeSession();
     }
   }, [isSessionActive]);
 
   useEffect(() => {
-    if (isSessionActive && data && sessionIdRef.current) {
+    if (isSessionActive && data) {
       setSessionData((prev) => [...prev, data]);
 
       const velocity = Math.abs(data.stability - baseline) * 2;
@@ -112,13 +115,11 @@ export const TrainerPage = () => {
   };
 
   const endSession = async () => {
-    if (!sessionStartTime || !sessionIdRef.current) {
-      console.log('Cannot end session - missing sessionStartTime or sessionId', {
-        sessionStartTime,
-        sessionId: sessionIdRef.current
-      });
+    const startTime = sessionStartTimeRef.current;
+    if (!startTime || !sessionIdRef.current) {
       setIsSessionActive(false);
       setSessionStartTime(null);
+      sessionStartTimeRef.current = null;
       setSessionData([]);
       repAnalyzer.reset();
       setHasTriggeredFinalRep(false);
@@ -126,7 +127,7 @@ export const TrainerPage = () => {
     }
 
     try {
-      const durationSeconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const durationSeconds = Math.floor((Date.now() - startTime) / 1000);
       const avgStability = sessionData.length > 0
         ? sessionData.reduce((sum, d) => sum + d.stability, 0) / sessionData.length
         : data?.stability || 0;
@@ -222,6 +223,7 @@ export const TrainerPage = () => {
           baseline_tremor: baselineTremor,
           baseline_calibrated: repAnalyzer.isBaselineCalibrated(),
           tremor_deviation_avg: currentAnalysis?.tremorDeviation || 0,
+          time_under_neural_tension: Math.round(timeUnderNeuralTension),
         })
         .eq('id', sessionIdRef.current);
 
@@ -230,7 +232,6 @@ export const TrainerPage = () => {
         throw error;
       }
 
-      console.log('Session ended successfully');
       playSuccessSound();
 
       setFinalScore(hypertrophyScore);
@@ -238,6 +239,7 @@ export const TrainerPage = () => {
 
       setIsSessionActive(false);
       setSessionStartTime(null);
+      sessionStartTimeRef.current = null;
       setSessionData([]);
       sessionIdRef.current = null;
       repAnalyzer.reset();
@@ -249,6 +251,7 @@ export const TrainerPage = () => {
       console.error('Failed to end session:', error);
       setIsSessionActive(false);
       setSessionStartTime(null);
+      sessionStartTimeRef.current = null;
       setSessionData([]);
       sessionIdRef.current = null;
       repAnalyzer.reset();
