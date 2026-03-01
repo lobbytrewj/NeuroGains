@@ -227,7 +227,7 @@ Analyzes stability changes to detect rep phases:
 
 ### Final Rep Prediction
 Multi-parameter model using:
-- Velocity loss relative to first rep (≥40% threshold)
+- Velocity loss relative to first rep (≥35% threshold)
 - Tremor frequency elevation (≥8Hz)
 - Non-linear jitter pattern detection
 - Decreasing velocity trend across last 3 reps
